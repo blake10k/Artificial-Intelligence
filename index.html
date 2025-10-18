@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APA Citation Generator</title>
+    <!-- Tailwind CSS for styling --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- pdf.js for PDF parsing --><script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <!-- Google Fonts: Inter --><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Applying the Inter font to the body */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f8fafc; /* Lighter gray for a softer feel */
+        }
+        /* Custom focus styles for better accessibility */
+        .focus-ring-blue-500:focus {
+            --tw-ring-opacity: 1;
+            --tw-ring-color: rgba(59, 130, 246, var(--tw-ring-opacity));
+            box-shadow: 0 0 0 3px var(--tw-ring-color);
+            border-color: rgba(59, 130, 246, 1);
+        }
+        .file-input-button::file-selector-button {
+            margin-right: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            border: 0;
+            font-size: 0.875rem;
+            font-weight: 600;
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            transition: background-color 150ms ease-in-out;
+            cursor: pointer;
+        }
+        .file-input-button::file-selector-button:hover {
+            background-color: #dbeafe;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen px-4 py-12">
+    <!-- Main container card --><div class="w-full max-w-3xl mx-auto bg-white rounded-2xl shadow-xl p-6 md:p-10">
+        
+        <!-- Header Section --><div class="text-center mb-10">
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-600">APA Citation Generator</h1>
+            <p class="text-gray-500 mt-3">Generate APA 7th edition citations from a DOI or Manual Entry.</p>
+        </div>
+
+        <!-- Automated Generation Section --><div class="mb-10 border-b pb-10">
+            <h2 class="text-xl font-semibold text-gray-700 text-center mb-6">Generate from DOI</h2>
+            <div class="flex justify-center">
+                <!-- Enter DOI --><div class="flex flex-col items-center p-4 border border-gray-200 rounded-lg bg-gray-50 h-full w-full md:w-1/2">
+                    <p class="text-gray-600 font-medium mb-3">Enter a DOI</p>
+                    <input type="text" id="doiInput" class="text-center block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm mb-4" placeholder="e.g., 10.1126/science.1172133">
+                    <button id="fetchByDoiBtn" class="mt-auto w-full bg-blue-600 text-white text-sm font-semibold py-2.5 px-5 rounded-lg hover:bg-blue-700 focus:outline-none focus-ring-blue-500 transition duration-150 ease-in-out flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
+                        Generate (DOI)
+                    </button>
+                </div>
+            </div>
+
+            <div id="loadingMessage" class="text-center pt-6 text-gray-600 hidden">
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span id="loadingText">Parsing PDF...</span>
+            </div>
+        </div>
+
+        <!-- Manual Input Form --><h2 class="text-xl font-semibold text-gray-700 text-center mb-6">Manual Entry</h2>
+        <div class="space-y-5">
+            <div>
+                <label for="authors" class="block text-sm font-medium text-gray-700 mb-1">Author(s)</label>
+                <input type="text" id="authors" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="Smith, J. D., & Johnson, A. B.">
+            </div>
+            <div>
+                <label for="year" class="block text-sm font-medium text-gray-700 mb-1">Publication Year</label>
+                <input type="text" id="year" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="2023">
+            </div>
+            <div>
+                <label for="title" class="block text-sm font-medium text-gray-700 mb-1">Article or Page Title</label>
+                <input type="text" id="title" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="The Impact of AI on Modern Research">
+            </div>
+            <div>
+                <label for="journal" class="block text-sm font-medium text-gray-700 mb-1">Journal or Website Name</label>
+                <input type="text" id="journal" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="Journal of Advanced Technology">
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div>
+                    <label for="volume" class="block text-sm font-medium text-gray-700 mb-1">Volume</label>
+                    <input type="text" id="volume" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="42">
+                </div>
+                <div>
+                    <label for="issue" class="block text-sm font-medium text-gray-700 mb-1">Issue</label>
+                    <input type="text" id="issue" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="3">
+                </div>
+                <div>
+                    <label for="pages" class="block text-sm font-medium text-gray-700 mb-1">Pages</label>
+                    <input type="text" id="pages" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="112-125">
+                </div>
+            </div>
+            <div>
+                <label for="url" class="block text-sm font-medium text-gray-700 mb-1">URL or DOI</label>
+                <input type="text" id="url" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="https://doi.org/10.1000/182">
+            </div>
+        </div>
+
+        <!-- Action Buttons --><div class="mt-10 pt-6 border-t grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button id="generateBtn" class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus-ring-blue-500 transition duration-150 ease-in-out">
+                Generate Citation
+            </button>
+            <button id="clearBtn" class="w-full bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition duration-150 ease-in-out">
+                Clear Fields
+            </button>
+        </div>
+
+        <!-- Output Section --><div id="outputSection" class="mt-10 hidden">
+            <h2 class="text-lg font-semibold text-gray-700">Your APA Citation:</h2>
+            <div class="mt-3 relative bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-inner">
+                <p id="citationOutput" class="text-gray-800 leading-relaxed pr-20 break-words"></p>
+                <button id="copyBtn" class="absolute top-3 right-3 bg-gray-200 text-gray-600 hover:bg-gray-300 p-2 rounded-md transition focus:outline-none focus-ring-blue-500" title="Copy to clipboard">
+                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" /><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" /></svg>
+                </button>
+                 <div id="copyFeedback" class="absolute top-3 right-3 bg-green-500 text-white text-sm font-medium py-2 px-3 rounded-md transition hidden items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                    Copied!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const authorsInput = document.getElementById('authors');
+        const yearInput = document.getElementById('year');
+        const titleInput = document.getElementById('title');
+        const journalInput = document.getElementById('journal');
+        const volumeInput = document.getElementById('volume');
+        const issueInput = document.getElementById('issue');
+        const pagesInput = document.getElementById('pages');
+        const urlInput = document.getElementById('url');
+        const generateBtn = document.getElementById('generateBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const outputSection = document.getElementById('outputSection');
+        const citationOutput = document.getElementById('citationOutput');
+        const copyBtn = document.getElementById('copyBtn');
+        const copyFeedback = document.getElementById('copyFeedback');
+        const doiInput = document.getElementById('doiInput');
+        const fetchByDoiBtn = document.getElementById('fetchByDoiBtn');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const loadingText = document.getElementById('loadingText');
+
+        fetchByDoiBtn.addEventListener('click', () => {
+            const doi = doiInput.value.trim();
+            if (!doi) {
+                showModal('Please enter a DOI to fetch.');
+                return;
+            }
+            fetchMetadataByDoi(doi);
+        });
+
+        async function fetchMetadataByDoi(doi) {
+            setLoading(true, 'Fetching metadata from Crossref...');
+            try {
+                const cleanedDoi = doi.replace(/^(https?:\/\/)?(dx\.)?doi\.org\//, '');
+                const response = await fetch(`https://api.crossref.org/works/${cleanedDoi}`);
+                if (!response.ok) {
+                    throw new Error(`DOI not found in Crossref (status: ${response.status})`);
+                }
+                const data = await response.json();
+                populateFormWithCrossrefData(data.message);
+                showModal('Successfully populated form with data from Crossref!', 'success');
+            } catch (error) {
+                console.error('Crossref API error:', error);
+                showModal('Could not retrieve metadata for the provided DOI. Please check it and try again, or complete the form manually.');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function formatAuthors(authors) {
+            if (!authors || authors.length === 0) return '';
+            const formattedAuthors = authors.map(author => {
+                const family = author.family || '';
+                const given = (author.given && author.given.length > 0) ? `${author.given.charAt(0)}.` : '';
+                return [family, given].filter(Boolean).join(', ');
+            });
+            if (formattedAuthors.length === 1) return formattedAuthors[0];
+            if (formattedAuthors.length <= 20) {
+                const lastAuthor = formattedAuthors.pop();
+                return `${formattedAuthors.join(', ')}, & ${lastAuthor}`;
+            }
+            const first19 = formattedAuthors.slice(0, 19);
+            const lastAuthor = formattedAuthors[formattedAuthors.length - 1];
+            return `${first19.join(', ')}, ..., ${lastAuthor}`;
+        }
+
+        function populateFormWithCrossrefData(data) {
+            clearFields();
+            authorsInput.value = formatAuthors(data.author);
+            const year = data.published?.['date-parts']?.[0]?.[0] || data.created?.['date-parts']?.[0]?.[0];
+            if (year) {
+                yearInput.value = year;
+            }
+            if (data.title && data.title.length > 0) {
+                titleInput.value = data.title[0];
+            }
+            if (data['container-title'] && data['container-title'].length > 0) {
+                journalInput.value = data['container-title'][0];
+            }
+            if (data.volume) volumeInput.value = data.volume;
+            if (data.issue) issueInput.value = data.issue;
+            if (data.page) pagesInput.value = data.page;
+            if (data.DOI) urlInput.value = `https://doi.org/${data.DOI}`;
+        }
+
+        generateBtn.addEventListener('click', () => {
+            const authors = authorsInput.value.trim();
+            const year = yearInput.value.trim();
+            const title = titleInput.value.trim();
+            const journal = journalInput.value.trim();
+            const volume = volumeInput.value.trim();
+            const issue = issueInput.value.trim();
+            const pages = pagesInput.value.trim();
+            const url = urlInput.value.trim();
+            if (!authors && !year && !title) {
+                showModal('Please fill in at least the author, year, and title fields.');
+                return;
+            }
+            let citation = '';
+            if (authors) citation += `${authors} `;
+            if (year) citation += `(${year}). `;
+            if (title) citation += `${title}. `;
+            let sourceInfo = '';
+            if (journal) sourceInfo += `<em>${journal}</em>`;
+            if (volume) sourceInfo += `, <em>${volume}</em>`;
+            if (issue) sourceInfo += `(${issue})`;
+            if (pages) sourceInfo += `, ${pages}`;
+            if (sourceInfo) citation += `${sourceInfo}. `;
+            if (url) citation += url;
+            citation = citation.trim();
+            citationOutput.innerHTML = citation;
+            outputSection.classList.remove('hidden');
+        });
+
+        function setLoading(isLoading, message = '') {
+            if (isLoading) {
+                loadingMessage.classList.remove('hidden');
+                loadingText.textContent = message;
+                fetchByDoiBtn.disabled = true;
+                fetchByDoiBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                loadingMessage.classList.add('hidden');
+                fetchByDoiBtn.disabled = false;
+                fetchByDoiBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        function clearFields() {
+             const inputs = [authorsInput, yearInput, titleInput, journalInput, volumeInput, issueInput, pagesInput, urlInput, doiInput];
+            inputs.forEach(input => input.value = '');
+            outputSection.classList.add('hidden');
+        }
+        clearBtn.addEventListener('click', clearFields);
+
+        copyBtn.addEventListener('click', () => {
+            const textArea = document.createElement('textarea');
+            textArea.value = citationOutput.innerText; 
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                copyBtn.classList.add('hidden');
+                copyFeedback.classList.remove('hidden');
+                copyFeedback.style.display = 'flex';
+                setTimeout(() => {
+                    copyFeedback.classList.add('hidden');
+                    copyFeedback.style.display = 'none';
+                    copyBtn.classList.remove('hidden');
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text to clipboard: ', err);
+            }
+            document.body.removeChild(textArea);
+        });
+
+        function showModal(message, type = 'error') {
+            const existingModal = document.querySelector('.modal-overlay');
+            if (existingModal) existingModal.remove();
+            const modalOverlay = document.createElement('div');
+            modalOverlay.className = 'modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+            const modalContent = document.createElement('div');
+            modalContent.className = 'bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-auto';
+            const messageP = document.createElement('p');
+            messageP.className = 'text-gray-700 text-center';
+            messageP.textContent = message;
+            const closeButton = document.createElement('button');
+            closeButton.textContent = 'Close';
+            closeButton.className = 'mt-4 w-full px-4 py-2 rounded-md text-white font-semibold transition';
+            closeButton.classList.add(type === 'success' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-500 hover:bg-red-600');
+            closeButton.onclick = () => {
+                if (document.body.contains(modalOverlay)) {
+                    document.body.removeChild(modalOverlay);
+                }
+            };
+            modalContent.appendChild(messageP);
+            modalContent.appendChild(closeButton);
+            modalOverlay.appendChild(modalContent);
+            document.body.appendChild(modalOverlay);
+            closeButton.focus();
+        }
+    </script>
+</body>
+</html>
+
