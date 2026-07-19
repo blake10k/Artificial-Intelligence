@@ -1,314 +1,762 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>APA Citation Generator</title>
-    <!-- Tailwind CSS for styling --><script src="https://cdn.tailwindcss.com"></script>
-    <!-- pdf.js for PDF parsing --><script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
-    <!-- Google Fonts: Inter --><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        /* Applying the Inter font to the body */
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background-color: #f8fafc; /* Lighter gray for a softer feel */
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Play, Lightbulb, CheckCircle, XCircle, ChevronRight, Home, 
+  Gamepad2, Brain, AlertTriangle, Layers, Type, FileText,
+  MousePointerClick, Check, X, ShieldAlert
+} from 'lucide-react';
+
+// --- MOCK CURRICULUM DATA (AI FOCUSED) ---
+const MODULES = [
+  {
+    id: 1,
+    title: "Module 1: AI Fundamentals",
+    topic: "Core Concepts & Definitions",
+    case: "Understanding the Basics",
+    brief: "Welcome to Data Lab Academy, Researcher. \n\nBefore diving into complex AI systems, we must establish a strong foundation. In this module, we will review core AI terminology and concepts.\n\n**Your Objectives:**\n1. Identify correct AI definitions.\n2. Understand the difference between AI, ML, and GenAI.",
+    steps: [
+      {
+        id: "1.1",
+        type: "multiple-choice",
+        instruction: "**Step 1: Multiple-Choice Quiz**\nLet's test your baseline knowledge. Which of the following best describes 'Generative AI'?",
+        options: [
+          "AI that only sorts data into existing categories.",
+          "AI that can create new content (text, images, code) based on learned patterns.",
+          "A traditional rule-based programming script.",
+          "AI that is explicitly programmed with every possible answer."
+        ],
+        correctIndex: 1,
+        successMsg: "Correct! Generative AI creates net-new content based on its training data.",
+        xpReward: 50
+      },
+      {
+        id: "1.2",
+        type: "memory-match",
+        instruction: "**Step 2: Memory Match**\nMatch the core AI terms with their correct definitions to proceed. (Flipping a pair counts as 1 attempt).",
+        pairs: [
+          { term: "LLM", def: "Large Language Model" },
+          { term: "Prompt", def: "Input given to an AI" },
+          { term: "Token", def: "A piece of a word" },
+          { term: "Model", def: "The trained AI system" }
+        ],
+        successMsg: "Excellent memory! Understanding these terms is crucial.",
+        xpReward: 100
+      }
+    ]
+  },
+  {
+    id: 2,
+    title: "Module 2: Prompt Engineering",
+    topic: "Crafting Effective Inputs",
+    case: "Optimizing Outputs",
+    brief: "An AI model is only as good as the instructions it receives. \n\nIn this module, you will practice Prompt Engineering—the art of writing clear, contextual, and specific prompts to get the best possible results from an LLM.",
+    steps: [
+      {
+        id: "2.1",
+        type: "scenario",
+        instruction: "**Step 1: Scenario Challenge**\nYou need the AI to summarize a highly technical medical document for a 10-year-old. Which prompt approach is best?",
+        scenarioText: "The document contains complex jargon about mRNA sequencing.",
+        options: [
+          "Summarize this document.",
+          "Explain this document like I am 10 years old, using simple analogies instead of medical jargon.",
+          "Extract the key findings regarding mRNA.",
+          "Rewrite this in a professional tone."
+        ],
+        correctIndex: 1,
+        successMsg: "Perfect! Giving the AI a persona ('like I am 10') and constraints ('simple analogies') yields the best result.",
+        xpReward: 75
+      },
+      {
+        id: "2.2",
+        type: "classification",
+        instruction: "**Step 2: Classification Sort**\nCategorize the following prompt snippets into 'Good Practice' or 'Poor Practice'.",
+        items: [
+          { text: "Write an email.", category: "Poor" },
+          { text: "Act as a marketing expert and write a 3-paragraph email.", category: "Good" },
+          { text: "Fix this code.", category: "Poor" },
+          { text: "Find the syntax error in this Python function and explain why it failed.", category: "Good" }
+        ],
+        categories: ["Good", "Poor"],
+        successMsg: "Spot on! Specificity and context are the hallmarks of a good prompt.",
+        xpReward: 75
+      }
+    ]
+  },
+  {
+    id: 3,
+    title: "Module 3: AI Safety & Hallucinations",
+    topic: "Identifying AI Errors",
+    case: "Trust but Verify",
+    brief: "AI models can sometimes generate false or misleading information, known as 'hallucinations'. \n\nAs a researcher, your job is to critically evaluate AI outputs and identify logical flaws or factual inaccuracies.",
+    steps: [
+      {
+        id: "3.1",
+        type: "hallucination",
+        instruction: "**Step 1: Hallucination Hunt**\nRead the AI-generated biography below. Click on the factual error (hallucination) hidden in the text.",
+        textBlocks: [
+          { text: "Abraham Lincoln was the 16th President of the United States. ", isTarget: false },
+          { text: "He successfully led the nation through the American Civil War. ", isTarget: false },
+          { text: "During his presidency, he often communicated using his personal smartphone. ", isTarget: true },
+          { text: "He is remembered for the Emancipation Proclamation." , isTarget: false }
+        ],
+        successMsg: "Great catch! Smartphones did not exist during Lincoln's presidency. Always verify AI facts.",
+        xpReward: 100
+      },
+      {
+        id: "3.2",
+        type: "multiple-choice",
+        instruction: "**Step 2: AI Safety Principles**\nWhen using AI to generate code for a production application, what is the safest workflow?",
+        options: [
+          "Copy and paste the code directly into production to save time.",
+          "Assume the AI is smarter than you and trust its output blindly.",
+          "Review, test, and understand the code before deploying it.",
+          "Only use AI for writing comments, never logic."
+        ],
+        correctIndex: 2,
+        successMsg: "Correct! Human-in-the-loop review is essential for AI safety and code quality.",
+        xpReward: 50
+      }
+    ]
+  }
+];
+
+const FormattedText = ({ text }) => {
+  const parts = text.split(/(\*\*.*?\*\*|\n)/g);
+  return (
+    <div className="whitespace-pre-wrap leading-relaxed">
+      {parts.map((part, i) => {
+        if (part === '\n') return <br key={i} />;
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i} className="text-red-400 font-semibold">{part.slice(2, -2)}</strong>;
         }
-        /* Custom focus styles for better accessibility */
-        .focus-ring-blue-500:focus {
-            --tw-ring-opacity: 1;
-            --tw-ring-color: rgba(59, 130, 246, var(--tw-ring-opacity));
-            box-shadow: 0 0 0 3px var(--tw-ring-color);
-            border-color: rgba(59, 130, 246, 1);
-        }
-        .file-input-button::file-selector-button {
-            margin-right: 1rem;
-            padding: 0.5rem 1rem;
-            border-radius: 0.375rem;
-            border: 0;
-            font-size: 0.875rem;
-            font-weight: 600;
-            background-color: #eff6ff;
-            color: #1d4ed8;
-            transition: background-color 150ms ease-in-out;
-            cursor: pointer;
-        }
-        .file-input-button::file-selector-button:hover {
-            background-color: #dbeafe;
-        }
-    </style>
-</head>
-<body class="flex items-center justify-center min-h-screen px-4 py-12">
-    <!-- Main container card --><div class="w-full max-w-3xl mx-auto bg-white rounded-2xl shadow-xl p-6 md:p-10">
-        
-        <!-- Header Section --><div class="text-center mb-10">
-            <h1 class="text-3xl md:text-4xl font-bold text-blue-600">APA Citation Generator</h1>
-            <p class="text-gray-500 mt-3">Generate APA 7th edition citations from a DOI or Manual Entry.</p>
-        </div>
-
-        <!-- Automated Generation Section --><div class="mb-10 border-b pb-10">
-            <h2 class="text-xl font-semibold text-gray-700 text-center mb-6">Generate from DOI</h2>
-            <div class="flex justify-center">
-                <!-- Enter DOI --><div class="flex flex-col items-center p-4 border border-gray-200 rounded-lg bg-gray-50 h-full w-full md:w-1/2">
-                    <p class="text-gray-600 font-medium mb-3">Enter a DOI</p>
-                    <input type="text" id="doiInput" class="text-center block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm mb-4" placeholder="e.g., 10.1126/science.1172133">
-                    <button id="fetchByDoiBtn" class="mt-auto w-full bg-blue-600 text-white text-sm font-semibold py-2.5 px-5 rounded-lg hover:bg-blue-700 focus:outline-none focus-ring-blue-500 transition duration-150 ease-in-out flex items-center justify-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
-                        Generate (DOI)
-                    </button>
-                </div>
-            </div>
-
-            <div id="loadingMessage" class="text-center pt-6 text-gray-600 hidden">
-                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span id="loadingText">Parsing PDF...</span>
-            </div>
-        </div>
-
-        <!-- Manual Input Form --><h2 class="text-xl font-semibold text-gray-700 text-center mb-6">Manual Entry</h2>
-        <div class="space-y-5">
-            <div>
-                <label for="authors" class="block text-sm font-medium text-gray-700 mb-1">Author(s)</label>
-                <input type="text" id="authors" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="Smith, J. D., & Johnson, A. B.">
-            </div>
-            <div>
-                <label for="year" class="block text-sm font-medium text-gray-700 mb-1">Publication Year</label>
-                <input type="text" id="year" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="2023">
-            </div>
-            <div>
-                <label for="title" class="block text-sm font-medium text-gray-700 mb-1">Article or Page Title</label>
-                <input type="text" id="title" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="The Impact of AI on Modern Research">
-            </div>
-            <div>
-                <label for="journal" class="block text-sm font-medium text-gray-700 mb-1">Journal or Website Name</label>
-                <input type="text" id="journal" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="Journal of Advanced Technology">
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div>
-                    <label for="volume" class="block text-sm font-medium text-gray-700 mb-1">Volume</label>
-                    <input type="text" id="volume" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="42">
-                </div>
-                <div>
-                    <label for="issue" class="block text-sm font-medium text-gray-700 mb-1">Issue</label>
-                    <input type="text" id="issue" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="3">
-                </div>
-                <div>
-                    <label for="pages" class="block text-sm font-medium text-gray-700 mb-1">Pages</label>
-                    <input type="text" id="pages" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="112-125">
-                </div>
-            </div>
-            <div>
-                <label for="url" class="block text-sm font-medium text-gray-700 mb-1">URL or DOI</label>
-                <input type="text" id="url" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus-ring-blue-500 sm:text-sm" placeholder="https://doi.org/10.1000/182">
-            </div>
-        </div>
-
-        <!-- Action Buttons --><div class="mt-10 pt-6 border-t grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <button id="generateBtn" class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus-ring-blue-500 transition duration-150 ease-in-out">
-                Generate Citation
-            </button>
-            <button id="clearBtn" class="w-full bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition duration-150 ease-in-out">
-                Clear Fields
-            </button>
-        </div>
-
-        <!-- Output Section --><div id="outputSection" class="mt-10 hidden">
-            <h2 class="text-lg font-semibold text-gray-700">Your APA Citation:</h2>
-            <div class="mt-3 relative bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-inner">
-                <p id="citationOutput" class="text-gray-800 leading-relaxed pr-20 break-words"></p>
-                <button id="copyBtn" class="absolute top-3 right-3 bg-gray-200 text-gray-600 hover:bg-gray-300 p-2 rounded-md transition focus:outline-none focus-ring-blue-500" title="Copy to clipboard">
-                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" /><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" /></svg>
-                </button>
-                 <div id="copyFeedback" class="absolute top-3 right-3 bg-green-500 text-white text-sm font-medium py-2 px-3 rounded-md transition hidden items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
-                    Copied!
-                </div>
-            </div>
-        </div>
+        return <span key={i}>{part}</span>;
+      })}
     </div>
+  );
+};
 
-    <script>
-        const authorsInput = document.getElementById('authors');
-        const yearInput = document.getElementById('year');
-        const titleInput = document.getElementById('title');
-        const journalInput = document.getElementById('journal');
-        const volumeInput = document.getElementById('volume');
-        const issueInput = document.getElementById('issue');
-        const pagesInput = document.getElementById('pages');
-        const urlInput = document.getElementById('url');
-        const generateBtn = document.getElementById('generateBtn');
-        const clearBtn = document.getElementById('clearBtn');
-        const outputSection = document.getElementById('outputSection');
-        const citationOutput = document.getElementById('citationOutput');
-        const copyBtn = document.getElementById('copyBtn');
-        const copyFeedback = document.getElementById('copyFeedback');
-        const doiInput = document.getElementById('doiInput');
-        const fetchByDoiBtn = document.getElementById('fetchByDoiBtn');
-        const loadingMessage = document.getElementById('loadingMessage');
-        const loadingText = document.getElementById('loadingText');
 
-        fetchByDoiBtn.addEventListener('click', () => {
-            const doi = doiInput.value.trim();
-            if (!doi) {
-                showModal('Please enter a DOI to fetch.');
-                return;
-            }
-            fetchMetadataByDoi(doi);
-        });
+const MultipleChoiceGame = ({ step, onAttempt, isCompleted, forceShowAnswer }) => {
+  const [selected, setSelected] = useState(null);
 
-        async function fetchMetadataByDoi(doi) {
-            setLoading(true, 'Fetching metadata from Crossref...');
-            try {
-                const cleanedDoi = doi.replace(/^(https?:\/\/)?(dx\.)?doi\.org\//, '');
-                const response = await fetch(`https://api.crossref.org/works/${cleanedDoi}`);
-                if (!response.ok) {
-                    throw new Error(`DOI not found in Crossref (status: ${response.status})`);
-                }
-                const data = await response.json();
-                populateFormWithCrossrefData(data.message);
-                showModal('Successfully populated form with data from Crossref!', 'success');
-            } catch (error) {
-                console.error('Crossref API error:', error);
-                showModal('Could not retrieve metadata for the provided DOI. Please check it and try again, or complete the form manually.');
-            } finally {
-                setLoading(false);
-            }
+  useEffect(() => {
+    if (forceShowAnswer) setSelected(step.correctIndex);
+  }, [forceShowAnswer, step.correctIndex]);
+
+  const handleSelect = (idx) => {
+    if (isCompleted || forceShowAnswer) return;
+    setSelected(idx);
+    const isCorrect = idx === step.correctIndex;
+    onAttempt(isCorrect);
+  };
+
+  return (
+    <div className="space-y-3 p-2">
+      {step.options.map((opt, idx) => {
+        let btnClass = "w-full text-left p-4 rounded-xl border transition-all duration-300 font-medium ";
+        
+        if (isCompleted || forceShowAnswer) {
+          if (idx === step.correctIndex) {
+            btnClass += "bg-red-500/20 border-red-500 text-red-200 shadow-[0_0_15px_rgba(239,68,68,0.2)]";
+          } else if (idx === selected) {
+            btnClass += "bg-slate-800/50 border-slate-700 text-slate-500 opacity-50";
+          } else {
+            btnClass += "bg-[#1e1e1e] border-slate-800/80 text-slate-400 opacity-50";
+          }
+        } else {
+          btnClass += selected === idx 
+            ? "bg-slate-800 border-slate-600 text-slate-200" 
+            : "bg-[#1e1e1e] border-slate-800/80 text-slate-300 hover:border-red-500/50 hover:bg-slate-800/80";
         }
 
-        function formatAuthors(authors) {
-            if (!authors || authors.length === 0) return '';
-            const formattedAuthors = authors.map(author => {
-                const family = author.family || '';
-                const given = (author.given && author.given.length > 0) ? `${author.given.charAt(0)}.` : '';
-                return [family, given].filter(Boolean).join(', ');
-            });
-            if (formattedAuthors.length === 1) return formattedAuthors[0];
-            if (formattedAuthors.length <= 20) {
-                const lastAuthor = formattedAuthors.pop();
-                return `${formattedAuthors.join(', ')}, & ${lastAuthor}`;
-            }
-            const first19 = formattedAuthors.slice(0, 19);
-            const lastAuthor = formattedAuthors[formattedAuthors.length - 1];
-            return `${first19.join(', ')}, ..., ${lastAuthor}`;
+        return (
+          <button 
+            key={idx} 
+            onClick={() => handleSelect(idx)}
+            disabled={isCompleted || forceShowAnswer}
+            className={btnClass}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 ${
+                (isCompleted || forceShowAnswer) && idx === step.correctIndex ? 'border-red-500 bg-red-500 text-white' : 
+                'border-slate-600 text-transparent'
+              }`}>
+                {(isCompleted || forceShowAnswer) && idx === step.correctIndex && <Check size={14} />}
+              </div>
+              <span>{opt}</span>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
+const HallucinationGame = ({ step, onAttempt, isCompleted, forceShowAnswer }) => {
+  const [clickedIdx, setClickedIdx] = useState(null);
+
+  useEffect(() => {
+    if (forceShowAnswer) {
+      const targetIdx = step.textBlocks.findIndex(b => b.isTarget);
+      setClickedIdx(targetIdx);
+    }
+  }, [forceShowAnswer, step.textBlocks]);
+
+  const handleClick = (block, idx) => {
+    if (isCompleted || forceShowAnswer) return;
+    setClickedIdx(idx);
+    onAttempt(block.isTarget);
+  };
+
+  return (
+    <div className="p-6 bg-[#1e1e1e] rounded-xl border border-slate-800/80 leading-loose text-lg">
+      {step.textBlocks.map((block, idx) => {
+        let spanClass = "px-1 mx-0.5 rounded cursor-pointer transition-colors ";
+        
+        if (isCompleted || forceShowAnswer) {
+           if (block.isTarget) spanClass += "bg-red-500/30 text-red-300 font-semibold border-b-2 border-red-500";
+           else spanClass += "text-slate-500";
+        } else {
+           spanClass += clickedIdx === idx 
+             ? "bg-slate-700 text-slate-200" 
+             : "text-slate-300 hover:bg-slate-800";
         }
 
-        function populateFormWithCrossrefData(data) {
-            clearFields();
-            authorsInput.value = formatAuthors(data.author);
-            const year = data.published?.['date-parts']?.[0]?.[0] || data.created?.['date-parts']?.[0]?.[0];
-            if (year) {
-                yearInput.value = year;
-            }
-            if (data.title && data.title.length > 0) {
-                titleInput.value = data.title[0];
-            }
-            if (data['container-title'] && data['container-title'].length > 0) {
-                journalInput.value = data['container-title'][0];
-            }
-            if (data.volume) volumeInput.value = data.volume;
-            if (data.issue) issueInput.value = data.issue;
-            if (data.page) pagesInput.value = data.page;
-            if (data.DOI) urlInput.value = `https://doi.org/${data.DOI}`;
+        return (
+          <span 
+            key={idx} 
+            onClick={() => handleClick(block, idx)}
+            className={spanClass}
+          >
+            {block.text}
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
+const ClassificationGame = ({ step, onAttempt, isCompleted, forceShowAnswer }) => {
+  const [assignments, setAssignments] = useState({}); // index -> category
+  
+  useEffect(() => {
+    if (forceShowAnswer) {
+      const correctAssignments = {};
+      step.items.forEach((item, i) => correctAssignments[i] = item.category);
+      setAssignments(correctAssignments);
+    }
+  }, [forceShowAnswer, step.items]);
+
+  const handleAssign = (itemIdx, category) => {
+    if (isCompleted || forceShowAnswer) return;
+    const newAssignments = { ...assignments, [itemIdx]: category };
+    setAssignments(newAssignments);
+
+    // Check if all are assigned
+    if (Object.keys(newAssignments).length === step.items.length) {
+      let allCorrect = true;
+      step.items.forEach((item, i) => {
+        if (newAssignments[i] !== item.category) allCorrect = false;
+      });
+      // Small delay so they see their selection before it processes
+      setTimeout(() => onAttempt(allCorrect), 100);
+    }
+  };
+
+  return (
+    <div className="space-y-4 p-2">
+      {step.items.map((item, idx) => {
+        const isAssigned = assignments[idx] !== undefined;
+        const currentCat = assignments[idx];
+        const isCorrectlyAssigned = (isCompleted || forceShowAnswer) && currentCat === item.category;
+        
+        return (
+          <div key={idx} className={`p-4 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-300 ${
+            (isCompleted || forceShowAnswer) 
+              ? isCorrectlyAssigned ? 'bg-red-500/10 border-red-500/50' : 'bg-slate-800/50 border-slate-700 opacity-50'
+              : 'bg-[#1e1e1e] border-slate-800/80'
+          }`}>
+            <div className={`font-mono text-sm flex-1 ${(isCompleted || forceShowAnswer) ? 'text-slate-400' : 'text-slate-300'}`}>"{item.text}"</div>
+            
+            <div className="flex gap-2 shrink-0">
+              {step.categories.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => handleAssign(idx, cat)}
+                  disabled={isCompleted || forceShowAnswer}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                    currentCat === cat 
+                      ? (isCompleted || forceShowAnswer) ? 'bg-red-500 text-white shadow-md' : 'bg-slate-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const MemoryGame = ({ step, onAttempt, isCompleted, forceShowAnswer }) => {
+  // Flatten pairs into cards
+  const [cards, setCards] = useState([]);
+  const [flipped, setFlipped] = useState([]);
+  const [matched, setMatched] = useState([]);
+
+  useEffect(() => {
+    // Initial shuffle
+    let initialCards = [];
+    step.pairs.forEach((p, i) => {
+      initialCards.push({ id: `t${i}`, text: p.term, pairId: i, type: 'term' });
+      initialCards.push({ id: `d${i}`, text: p.def, pairId: i, type: 'def' });
+    });
+    // Deterministic shuffle for consistency in this demo
+    initialCards.sort((a, b) => (a.id > b.id ? 1 : -1));
+    setCards(initialCards);
+  }, [step]);
+
+  useEffect(() => {
+    if (forceShowAnswer) {
+      setMatched(step.pairs.map((_, i) => i));
+      setFlipped([]);
+    }
+  }, [forceShowAnswer, step.pairs]);
+
+  const handleFlip = (index) => {
+    if (isCompleted || forceShowAnswer || flipped.length >= 2 || flipped.includes(index) || matched.includes(cards[index].pairId)) return;
+
+    const newFlipped = [...flipped, index];
+    setFlipped(newFlipped);
+
+    if (newFlipped.length === 2) {
+      const match = cards[newFlipped[0]].pairId === cards[newFlipped[1]].pairId;
+      
+      setTimeout(() => {
+        if (match) {
+          const newMatched = [...matched, cards[newFlipped[0]].pairId];
+          setMatched(newMatched);
+          if (newMatched.length === step.pairs.length) {
+             onAttempt(true);
+          }
+        } else {
+          // Count as an attempt ONLY when a pair fails to match
+          onAttempt(false);
         }
+        setFlipped([]);
+      }, 800);
+    }
+  };
 
-        generateBtn.addEventListener('click', () => {
-            const authors = authorsInput.value.trim();
-            const year = yearInput.value.trim();
-            const title = titleInput.value.trim();
-            const journal = journalInput.value.trim();
-            const volume = volumeInput.value.trim();
-            const issue = issueInput.value.trim();
-            const pages = pagesInput.value.trim();
-            const url = urlInput.value.trim();
-            if (!authors && !year && !title) {
-                showModal('Please fill in at least the author, year, and title fields.');
-                return;
-            }
-            let citation = '';
-            if (authors) citation += `${authors} `;
-            if (year) citation += `(${year}). `;
-            if (title) citation += `${title}. `;
-            let sourceInfo = '';
-            if (journal) sourceInfo += `<em>${journal}</em>`;
-            if (volume) sourceInfo += `, <em>${volume}</em>`;
-            if (issue) sourceInfo += `(${issue})`;
-            if (pages) sourceInfo += `, ${pages}`;
-            if (sourceInfo) citation += `${sourceInfo}. `;
-            if (url) citation += url;
-            citation = citation.trim();
-            citationOutput.innerHTML = citation;
-            outputSection.classList.remove('hidden');
-        });
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-2">
+      {cards.map((card, idx) => {
+        const isFlipped = flipped.includes(idx) || matched.includes(card.pairId) || forceShowAnswer;
+        const isMatched = matched.includes(card.pairId) || forceShowAnswer;
 
-        function setLoading(isLoading, message = '') {
-            if (isLoading) {
-                loadingMessage.classList.remove('hidden');
-                loadingText.textContent = message;
-                fetchByDoiBtn.disabled = true;
-                fetchByDoiBtn.classList.add('opacity-50', 'cursor-not-allowed');
-            } else {
-                loadingMessage.classList.add('hidden');
-                fetchByDoiBtn.disabled = false;
-                fetchByDoiBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-            }
+        return (
+          <div 
+            key={card.id} 
+            onClick={() => handleFlip(idx)}
+            className={`relative h-32 rounded-xl cursor-pointer perspective-1000 transition-all duration-300 ${
+              isMatched ? 'opacity-70 scale-95' : 'hover:-translate-y-1'
+            }`}
+          >
+            <div className={`w-full h-full transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+              {/* Front (Hidden) */}
+              <div className="absolute w-full h-full backface-hidden bg-[#1e1e1e] border-2 border-slate-800/80 rounded-xl flex items-center justify-center shadow-md">
+                <Brain size={32} className="text-slate-700" />
+              </div>
+              {/* Back (Revealed) */}
+              <div className={`absolute w-full h-full backface-hidden rotate-y-180 rounded-xl flex items-center justify-center p-3 text-center border-2 shadow-lg ${
+                isMatched ? 'bg-red-500/10 border-red-500/50 text-red-300' : 'bg-slate-800 border-slate-600 text-slate-200'
+              }`}>
+                <span className={`font-semibold ${card.type === 'def' ? 'text-xs' : 'text-base'}`}>{card.text}</span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+
+export default function App() {
+  const [xp, setXp] = useState(0);
+  const [level, setLevel] = useState(1);
+  const [activeTab, setActiveTab] = useState('home'); // 'home' or 'game'
+  
+  const [activeModuleId, setActiveModuleId] = useState(1);
+  
+  // Unlock all modules by default as per instructions
+  const [unlockedModules, setUnlockedModules] = useState(MODULES.map(m => m.id));
+  
+  const activeModuleData = MODULES.find(m => m.id === activeModuleId);
+  
+  const [completedSteps, setCompletedSteps] = useState([]);
+  const [currentStepId, setCurrentStepId] = useState(activeModuleData.steps[0].id);
+  
+  // Track attempts per step id
+  const [attempts, setAttempts] = useState({});
+  const MAX_ATTEMPTS = 3;
+
+  const [stepFeedback, setStepFeedback] = useState({});
+  const [forceShowAnswers, setForceShowAnswers] = useState({}); // track which steps were force solved
+
+  const bottomRef = useRef(null);
+
+  // Auto-scroll logic
+  useEffect(() => {
+    if (activeTab === 'game' && bottomRef.current) {
+      setTimeout(() => {
+        bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+    }
+  }, [currentStepId, completedSteps, activeTab]);
+
+  const handleLaunchGame = (moduleId) => {
+    setActiveModuleId(moduleId);
+    setActiveTab('game');
+    const mod = MODULES.find(m => m.id === moduleId);
+    
+    // Find first uncompleted step, else last step
+    const firstUncompleted = mod.steps.find(s => !completedSteps.includes(s.id));
+    const stepToActivate = firstUncompleted ? firstUncompleted : mod.steps[mod.steps.length - 1];
+    
+    setCurrentStepId(stepToActivate.id);
+  };
+
+  const handleAttempt = (step, isCorrect) => {
+    const currentAttempts = attempts[step.id] || 0;
+    const newAttemptsCount = currentAttempts + 1;
+    
+    setAttempts(prev => ({ ...prev, [step.id]: newAttemptsCount }));
+
+    if (isCorrect) {
+      // WIN
+      handleStepSuccess(step, newAttemptsCount);
+    } else {
+      if (newAttemptsCount >= MAX_ATTEMPTS) {
+        // FAIL - Max attempts reached. Force correct answer.
+        setStepFeedback({ ...stepFeedback, [step.id]: { type: "error", msg: `Max attempts (${MAX_ATTEMPTS}) reached. Showing correct answer...` } });
+        setForceShowAnswers(prev => ({ ...prev, [step.id]: true }));
+        
+        // Pause and then move to next
+        setTimeout(() => {
+          handleStepSuccess(step, newAttemptsCount, true);
+        }, 2500); // 2.5s pause before advancing
+      } else {
+        // FAIL - Try again
+        setStepFeedback({ ...stepFeedback, [step.id]: { type: "error", msg: `Incorrect. Try again. Attempt ${newAttemptsCount}/${MAX_ATTEMPTS}` } });
+      }
+    }
+  };
+
+  const handleStepSuccess = (step, attemptCount, wasForced = false) => {
+    if (!wasForced) {
+      setStepFeedback(prev => ({ ...prev, [step.id]: { type: "success", msg: step.successMsg } }));
+    }
+    
+    if (!completedSteps.includes(step.id)) {
+      setCompletedSteps(prev => [...prev, step.id]);
+      if (!wasForced) {
+        // Only award XP if they got it right without being forced
+        const xpEarned = Math.max(10, step.xpReward - ((attemptCount - 1) * 15));
+        setXp(prev => prev + xpEarned);
+      }
+
+      const stepIndex = activeModuleData.steps.findIndex(s => s.id === step.id);
+      if (stepIndex < activeModuleData.steps.length - 1) {
+        const nextStep = activeModuleData.steps[stepIndex + 1];
+        setCurrentStepId(nextStep.id);
+      } else {
+        // Module Complete
+        if (activeModuleData.id < MODULES.length) {
+          // Auto advance to next module after a short delay
+          setTimeout(() => {
+             handleLaunchGame(activeModuleData.id + 1);
+          }, 3000);
         }
+      }
+    }
+  };
 
-        function clearFields() {
-             const inputs = [authorsInput, yearInput, titleInput, journalInput, volumeInput, issueInput, pagesInput, urlInput, doiInput];
-            inputs.forEach(input => input.value = '');
-            outputSection.classList.add('hidden');
+  const courseProgressPercent = Math.round(
+    (MODULES.filter(mod => mod.steps.every(step => completedSteps.includes(step.id))).length / MODULES.length) * 100
+  );
+
+  return (
+    <div className="flex h-screen w-full bg-[#09090b] text-slate-300 font-sans overflow-hidden selection:bg-red-500/30">
+      
+      {/* Required CSS for 3D Flips */}
+      <style dangerouslySetInnerHTML={{__html: `
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #ef4444; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #dc2626; }
+        .fade-in { animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(15px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        clearBtn.addEventListener('click', clearFields);
+        .perspective-1000 { perspective: 1000px; }
+        .transform-style-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; }
+        .rotate-y-180 { transform: rotateY(180deg); }
+      `}} />
 
-        copyBtn.addEventListener('click', () => {
-            const textArea = document.createElement('textarea');
-            textArea.value = citationOutput.innerText; 
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                copyBtn.classList.add('hidden');
-                copyFeedback.classList.remove('hidden');
-                copyFeedback.style.display = 'flex';
-                setTimeout(() => {
-                    copyFeedback.classList.add('hidden');
-                    copyFeedback.style.display = 'none';
-                    copyBtn.classList.remove('hidden');
-                }, 2000);
-            } catch (err) {
-                console.error('Failed to copy text to clipboard: ', err);
-            }
-            document.body.removeChild(textArea);
-        });
+      {/* --- LEFT SIDEBAR --- */}
+      <div className="w-80 bg-[#0c0c0e] border-r border-slate-800/50 flex-col h-full flex-shrink-0 z-10 hidden md:flex shadow-[4px_0_24px_rgba(0,0,0,0.2)]">
+        {/* Profile */}
+        <div className="p-8 border-b border-slate-800/50 bg-gradient-to-b from-[#111115] to-[#0c0c0e]">
+          <div className="flex items-center gap-5 mb-6">
+            <button 
+              onClick={() => setActiveTab('home')}
+              className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-red-600 to-red-400 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.25)] border border-red-400/20 transform hover:scale-105 transition-transform duration-300 cursor-pointer"
+            >
+              <Gamepad2 size={26} className="text-red-950" strokeWidth={2.5} />
+            </button>
+            <div>
+              <h2 className="font-bold text-slate-100 text-lg tracking-tight">Researcher</h2>
+              <div className="text-xs text-red-400 font-semibold tracking-wider uppercase mt-0.5">Level {Math.floor(xp / 200) + 1}</div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-slate-400 font-medium tracking-wide">Course Progress</span>
+              <span className="text-red-400 font-mono font-bold">{courseProgressPercent}%</span>
+            </div>
+            <div className="w-full bg-slate-800/60 rounded-full h-2 overflow-hidden shadow-inner">
+              <div className="bg-gradient-to-r from-red-600 to-red-400 h-full transition-all duration-1000 ease-out relative" style={{ width: `${courseProgressPercent}%` }}>
+                <div className="absolute top-0 right-0 bottom-0 w-4 bg-white/30 blur-[2px] rounded-full"></div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-        function showModal(message, type = 'error') {
-            const existingModal = document.querySelector('.modal-overlay');
-            if (existingModal) existingModal.remove();
-            const modalOverlay = document.createElement('div');
-            modalOverlay.className = 'modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
-            const modalContent = document.createElement('div');
-            modalContent.className = 'bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-auto';
-            const messageP = document.createElement('p');
-            messageP.className = 'text-gray-700 text-center';
-            messageP.textContent = message;
-            const closeButton = document.createElement('button');
-            closeButton.textContent = 'Close';
-            closeButton.className = 'mt-4 w-full px-4 py-2 rounded-md text-white font-semibold transition';
-            closeButton.classList.add(type === 'success' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-500 hover:bg-red-600');
-            closeButton.onclick = () => {
-                if (document.body.contains(modalOverlay)) {
-                    document.body.removeChild(modalOverlay);
-                }
-            };
-            modalContent.appendChild(messageP);
-            modalContent.appendChild(closeButton);
-            modalOverlay.appendChild(modalContent);
-            document.body.appendChild(modalOverlay);
-            closeButton.focus();
-        }
-    </script>
-</body>
-</html>
+        {/* Curriculum Outline */}
+        <div className="p-6 flex-1 overflow-y-auto">
+          <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5 flex items-center gap-2">
+             <FileText size={14} /> Training Modules
+          </h3>
+          <div className="space-y-2.5">
+            {MODULES.map((mod) => {
+              const isActive = activeModuleId === mod.id && activeTab === 'game';
+              const isModuleComplete = mod.steps.every(s => completedSteps.includes(s.id));
+              
+              return (
+                <div 
+                  key={mod.id}
+                  onClick={() => handleLaunchGame(mod.id)}
+                  className={`p-3 rounded-2xl border transition-all duration-300 ${isActive ? 'bg-red-500/10 border-red-500/30 shadow-[0_4px_20px_rgba(239,68,68,0.05)] cursor-pointer' : 'bg-slate-900/40 border-slate-800/60 cursor-pointer hover:bg-slate-800/50 hover:border-slate-700/50'}`}
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${isActive ? 'bg-red-500/20 text-red-400' : isModuleComplete ? 'bg-red-900/30 text-red-500' : 'bg-slate-800 text-slate-300'}`}>
+                      {isModuleComplete ? <CheckCircle size={16} /> : <span className="text-sm font-bold">{mod.id}</span>}
+                    </div>
+                    <div>
+                      <div className={`text-sm font-semibold tracking-tight ${isActive ? 'text-slate-100' : 'text-slate-300'}`}>{mod.title.split(': ')[1]}</div>
+                      <div className={`text-[11px] mt-0.5 font-medium ${isActive ? 'text-red-400/80' : 'text-slate-500'}`}>{mod.topic}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
+      {/* --- MAIN CONTENT AREA --- */}
+      <div className="flex-1 flex flex-col h-full relative bg-[#09090b]">
+        
+        {/* Top Navigation */}
+        <div className="h-16 border-b border-slate-800/60 bg-[#0c0c0e]/80 backdrop-blur-xl flex items-center px-4 md:px-8 gap-6 shrink-0 z-20 sticky top-0 justify-between">
+          <div className="flex items-center gap-6 h-full">
+            <button onClick={()=>setActiveTab('home')} className={`h-full flex items-center gap-2.5 border-b-2 px-2 transition-all duration-300 ${activeTab==='home' ? 'border-red-500 text-red-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <Home size={18} /> <span className="hidden sm:inline font-semibold tracking-wide text-sm">Home</span>
+            </button>
+          </div>
+          
+          {/* Module Title in top bar when in game */}
+          {activeTab === 'game' && (
+            <div className="flex items-center gap-3 bg-slate-900/50 px-4 py-1.5 rounded-full border border-slate-800/80">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden md:inline">Current:</span>
+              <span className="text-sm font-semibold text-slate-200">{activeModuleData.title}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Tab Content Container */}
+        <div className="flex-1 overflow-y-auto relative scroll-smooth bg-[#09090b] px-4 md:px-0">
+          
+          {/* TAB 1: HOME */}
+          {activeTab === 'home' && (
+            <div className="py-8 md:py-16 max-w-4xl mx-auto fade-in">
+              <div className="bg-[#0f1115] border border-slate-800/60 rounded-[2rem] p-8 md:p-14 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-red-600/10 rounded-full blur-[100px] -mr-48 -mt-48 pointer-events-none transition-all duration-1000"></div>
+                
+                <div className="flex items-center gap-3 text-red-400 mb-8 relative z-10">
+                  <div className="p-2 bg-red-500/10 rounded-lg">
+                    <Brain size={20} />
+                  </div>
+                  <h2 className="text-xs font-bold tracking-widest uppercase">AI Fundamentals Academy</h2>
+                </div>
+
+                <h1 className="text-4xl md:text-5xl font-extrabold text-slate-100 mb-6 leading-tight tracking-tight relative z-10">
+                  Welcome to <br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-red-300">Data Lab Academy</span>
+                </h1>
+
+                <p className="text-slate-400 text-lg leading-relaxed mb-12 max-w-2xl relative z-10">
+                  Data Lab Academy is an interactive applied learning environment. Progress through gamified modules to reinforce your understanding of core Artificial Intelligence concepts, prompt engineering, and model evaluation.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-14 relative z-10">
+                  {[
+                    { icon: MousePointerClick, color: 'text-red-400', title: 'Interactive Challenges', desc: 'Engage with flashcards, matching games, and scenarios.' },
+                    { icon: ShieldAlert, color: 'text-red-400', title: 'Hallucination Hunts', desc: 'Train your eye to spot logical flaws and factual errors in AI outputs.' },
+                    { icon: Type, color: 'text-red-400', title: 'Prompt Crafting', desc: 'Learn how to optimize inputs to get desired outputs.' },
+                    { icon: Layers, color: 'text-red-400', title: 'Seamless Progression', desc: 'Flow naturally from one concept to the next with instant feedback.' },
+                  ].map((card, i) => (
+                    <div key={i} className="bg-slate-900/40 border border-slate-800/60 p-6 rounded-3xl hover:bg-slate-800/40 hover:border-red-500/30 transition-all duration-300 group hover:-translate-y-1">
+                      <h3 className="text-slate-200 font-bold mb-3 flex items-center gap-3">
+                        <div className="p-2 bg-slate-800 rounded-lg group-hover:bg-red-500/10 transition-colors">
+                          <card.icon size={18} className={card.color}/>
+                        </div>
+                        {card.title}
+                      </h3>
+                      <p className="text-sm text-slate-400 leading-relaxed">{card.desc}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-gradient-to-br from-[#131b22] to-[#0c0c0e] border border-red-500/20 rounded-[2rem] p-8 md:p-10 relative z-10 shadow-[0_0_30px_rgba(239,68,68,0.05)]">
+                  <h3 className="text-slate-100 font-bold mb-3 flex items-center gap-3 text-xl">
+                    <Play size={24} className="text-red-400" fill="currentColor" /> Ready to begin?
+                  </h3>
+                  <p className="text-slate-400 text-base mb-8 max-w-xl">
+                    Begin your training with <strong className="text-slate-200">Module 1: AI Fundamentals</strong>. The system will guide you automatically through the curriculum.
+                  </p>
+                  <button onClick={()=>handleLaunchGame(1)} className="bg-red-600 hover:bg-red-500 text-white font-bold py-3.5 px-8 rounded-2xl transition-all duration-300 flex items-center gap-2 shadow-[0_0_20px_rgba(239,68,68,0.3)] hover:shadow-[0_0_30px_rgba(239,68,68,0.5)] hover:-translate-y-1">
+                    Launch Academy <ChevronRight size={18} strokeWidth={2.5} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {}
+          {/* TAB 2: GAME INTERFACE */}
+          {activeTab === 'game' && (
+            <div className="py-8 md:py-16 max-w-4xl mx-auto pb-40">
+              
+              {/* Module Header block */}
+              <div className="mb-12 flex flex-col md:flex-row items-start md:items-center justify-between bg-red-500/5 border border-red-500/10 p-6 rounded-3xl gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-3 mb-2">
+                    <Brain className="text-red-400" size={28} /> {activeModuleData.title}
+                  </h2>
+                  <p className="text-slate-400">{activeModuleData.brief}</p>
+                </div>
+                <div className="bg-slate-900 px-4 py-2 rounded-xl border border-slate-800 shrink-0 text-center">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Total XP</div>
+                  <div className="text-xl text-red-400 font-mono font-bold">{xp}</div>
+                </div>
+              </div>
+
+              {/* Render Steps (Games) */}
+              {activeModuleData.steps.map((step, index) => {
+                const isCompleted = completedSteps.includes(step.id);
+                const isActive = currentStepId === step.id;
+
+                if (!isCompleted && !isActive) return null;
+
+                const stepFeedbackData = stepFeedback[step.id];
+                const isForced = forceShowAnswers[step.id];
+                const attemptCount = attempts[step.id] || 0;
+
+                return (
+                  <div key={step.id} className="mb-14 fade-in relative group">
+                    {/* Connecting line for completed steps */}
+                    {isCompleted && index < activeModuleData.steps.length - 1 && (
+                      <div className="absolute left-8 top-full h-14 w-px bg-slate-800 -z-10"></div>
+                    )}
+
+                    {/* Instruction Block */}
+                    <div className="bg-transparent border-l-[3px] border-red-500 pl-6 py-2 mb-6 transition-all duration-300">
+                      <div className="text-slate-300 text-[15px]">
+                        <FormattedText text={step.instruction} />
+                      </div>
+                      
+                      {/* Attempts Counter (Only show when active and attempts > 0) */}
+                      {isActive && attemptCount > 0 && !isCompleted && !isForced && (
+                         <div className="mt-3 text-xs font-mono text-slate-500 flex items-center gap-2">
+                           <AlertTriangle size={14} className="text-amber-500" />
+                           Attempts used: <span className="text-slate-300">{attemptCount} / {MAX_ATTEMPTS}</span>
+                         </div>
+                      )}
+                    </div>
+
+                    {/* Game Container */}
+                    <div className={`rounded-2xl border ${isActive ? 'border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.05)]' : 'border-slate-800/60'} bg-[#131b22] transition-all duration-500 p-2 md:p-4`}>
+                      
+                      {/* Render specific game type */}
+                      {step.type === 'multiple-choice' || step.type === 'scenario' ? (
+                        <MultipleChoiceGame 
+                          step={step} 
+                          onAttempt={(isCorrect) => handleAttempt(step, isCorrect)} 
+                          isCompleted={isCompleted}
+                          forceShowAnswer={isForced}
+                        />
+                      ) : step.type === 'hallucination' ? (
+                        <HallucinationGame
+                          step={step}
+                          onAttempt={(isCorrect) => handleAttempt(step, isCorrect)}
+                          isCompleted={isCompleted}
+                          forceShowAnswer={isForced}
+                        />
+                      ) : step.type === 'classification' ? (
+                        <ClassificationGame
+                          step={step}
+                          onAttempt={(isCorrect) => handleAttempt(step, isCorrect)}
+                          isCompleted={isCompleted}
+                          forceShowAnswer={isForced}
+                        />
+                      ) : step.type === 'memory-match' ? (
+                         <MemoryGame
+                          step={step}
+                          onAttempt={(isCorrect) => handleAttempt(step, isCorrect)}
+                          isCompleted={isCompleted}
+                          forceShowAnswer={isForced}
+                        />
+                      ) : (
+                        <div className="p-10 text-center text-slate-500 font-mono">Unknown game type: {step.type}</div>
+                      )}
+
+                    </div>
+
+                    {/* Feedback Banner (Renders below game box) */}
+                    {stepFeedbackData && (isActive || (isCompleted && stepFeedbackData.type==='success')) && (
+                      <div className="mt-4 fade-in flex justify-end">
+                        <div className={`flex items-center gap-2.5 text-sm px-5 py-3 rounded-xl border font-medium shadow-lg max-w-lg ${stepFeedbackData.type === 'error' ? 'bg-amber-950/90 text-amber-400 border-amber-900/50' : 'bg-red-950/80 text-red-400 border-red-900/50'}`}>
+                          {stepFeedbackData.type === 'error' ? <AlertTriangle size={18} className="flex-shrink-0"/> : <CheckCircle size={18} className="flex-shrink-0"/>}
+                          <span>{stepFeedbackData.msg}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              
+              {/* Invisible element to auto-scroll to */}
+              <div ref={bottomRef} className="h-20"></div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
