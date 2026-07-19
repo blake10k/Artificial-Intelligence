@@ -748,6 +748,17 @@
                         const nextStepContainer = document.getElementById(`step-container-${nextStep.id}`);
                         if(nextStepContainer) nextStepContainer.classList.remove('hidden');
                         
+                        // Reveal the action bar for the next step
+                        const nextActionBar = document.getElementById(`action-bar-${nextStep.id}`);
+                        if(nextActionBar) nextActionBar.classList.remove('hidden');
+                        
+                        // Update editor borders for active state
+                        const nextEditor = document.getElementById(`editor-container-${nextStep.id}`);
+                        if(nextEditor) {
+                            nextEditor.classList.remove('border-slate-800/80');
+                            nextEditor.classList.add('border-yellow-500/40', 'shadow-[0_0_30px_rgba(234,179,8,0.08)]');
+                        }
+                        
                         // Pulse the new kernel
                         document.getElementById(`kernel-pulse-${nextStep.id}`)?.classList.remove('hidden');
                         
